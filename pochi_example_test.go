@@ -11,6 +11,7 @@ import (
 
 	"github.com/lestrrat-go/accesslog"
 	"github.com/lestrrat-go/pochi"
+	"github.com/lestrrat-go/pochi/middleware"
 )
 
 func ExampleRouter() {
@@ -18,7 +19,8 @@ func ExampleRouter() {
 
 	r.Route(
 		pochi.Path("/").
-			Use(accesslog.New().
+			Use(middleware.AccessLog().
+				// Use a static clock to get static output for testing
 				Clock(accesslog.StaticClock(time.Time{})).
 				Logger(
 					slog.New(
