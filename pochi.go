@@ -15,12 +15,14 @@ type Router interface {
 }
 
 type router struct {
-	paths *pathtrie
+	paths       *pathtrie
+	cachedPaths map[string]*PathSpec
 }
 
 func NewRouter() Router {
 	return &router{
-		paths: newPathtrie(),
+		paths:       newPathtrie(),
+		cachedPaths: make(map[string]*PathSpec),
 	}
 }
 
@@ -74,10 +76,15 @@ func (r *router) Route(specs ...*PathSpec) {
 }
 
 func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	spec, ok := r.paths.Get(strings.TrimSuffix(req.URL.Path, "/"))
+	pathkey := strings.TrimSuffix(req.URL.Path, "/")
+	spec, ok := r.cachedPaths[pathkey]
 	if !ok {
-		http.NotFound(w, req)
-		return
+		spec, ok = r.paths.Get(pathkey)
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		r.cachedPaths[pathkey] = spec
 	}
 	spec.ServeHTTP(w, req)
 }

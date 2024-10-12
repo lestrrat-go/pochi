@@ -43,11 +43,11 @@ func (p *PathSpec) PrependMiddlewares(middlewares ...Middleware) *PathSpec {
 }
 
 func (p *PathSpec) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	p.Compile()
+	p.compile()
 	p.handler.ServeHTTP(w, req)
 }
 
-func (p *PathSpec) Compile(ancestors ...*PathSpec) {
+func (p *PathSpec) compile(ancestors ...*PathSpec) {
 	if p.compiled.Load() {
 		return
 	}

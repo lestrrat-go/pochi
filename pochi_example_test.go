@@ -20,6 +20,11 @@ func ExampleRouter() {
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprintf(w, "Hello, World!")
 			})),
+		pochi.Path("/regular").
+			Get(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprintf(w, "Hello, World! (inherits from /)")
+			})),
 		pochi.Path("/noaccesslog").
 			InheritMiddlewares(false).
 			Get(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -36,7 +41,7 @@ func ExampleRouter() {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	for _, path := range []string{"/", "/noaccesslog"} {
+	for _, path := range []string{"/", "/regular", "/noaccesslog"} {
 		res, err := srv.Client().Get(srv.URL + path)
 		if err != nil {
 			fmt.Println(err)
@@ -52,9 +57,13 @@ func ExampleRouter() {
 	// OUTPUT:
 	// Path: /
 	// Path: /noaccesslog
+	// Path: /regular
 	// HTTP GET /
 	// 200
 	// Hello, World!
+	// HTTP GET /regular
+	// 200
+	// Hello, World! (inherits from /)
 	// 200
 	// Hello, World! (no accesslog)
 }
