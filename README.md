@@ -52,8 +52,19 @@ declared for `/foo`
 // pochi
 r.Routes(
     pochi.Path("/foo").
-        Use(...)
+        Use(...),
     pochi.Path("/foo/bar"),
     pochi.Path("/foo/baz"),
 )
 ```
+
+# Path declarations ending with "/" match wildcards
+
+Using the following path specification, you can match all paths under "/foo/*"
+
+```go
+r.Routes(
+    pochi.Path("/foo/"),
+)
+```
+

@@ -3,6 +3,7 @@ package pochi
 import (
 	"iter"
 	"net/http"
+	"path"
 	"strings"
 
 	"github.com/lestrrat-go/trie/v2"
@@ -10,6 +11,7 @@ import (
 
 type Router interface {
 	http.Handler
+	MatchRoute(string) (*PathSpec, bool)
 	Route(...*PathSpec)
 	Walk(RouteVisitor)
 }
@@ -75,16 +77,40 @@ func (r *router) Route(specs ...*PathSpec) {
 	}
 }
 
+func (r *router) MatchRoute(p string) (*PathSpec, bool) {
+	for p != "" {
+		spec, ok := r.paths.Get(p)
+		if !ok && p != "/" {
+			if p[len(p)-1] == '/' {
+				// if the path ends with a '/' (and is not root)
+				// strip it and try again
+				p = p[:len(p)-1]
+			}
+
+			p = path.Dir(p)
+			if p[len(p)-1] != '/' {
+				p += "/"
+			}
+			continue
+		}
+		if spec == nil {
+			return nil, false
+		}
+		return spec, true
+	}
+	return nil, false
+}
+
 func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	pathkey := strings.TrimSuffix(req.URL.Path, "/")
+	pathkey := req.URL.Path //strings.TrimSuffix(req.URL.Path, "/")
 	spec, ok := r.cachedPaths[pathkey]
 	if !ok {
-		spec, ok = r.paths.Get(pathkey)
+		spec, ok = r.MatchRoute(pathkey)
 		if !ok {
 			http.NotFound(w, req)
 			return
 		}
-		r.cachedPaths[pathkey] = spec
 	}
+	r.cachedPaths[pathkey] = spec
 	spec.ServeHTTP(w, req)
 }
