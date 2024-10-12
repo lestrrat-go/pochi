@@ -1,4 +1,4 @@
-# pochi
+# github.com/lestrrat-go/pochi ![](https://github.com/lestrrat-go/pochi/workflows/CI/badge.svg) [![Go Reference](https://pkg.go.dev/badge/github.com/lestrrat-go/pochi.svg)](https://pkg.go.dev/github.com/lestrrat-go/pochi)
 
 WIP - Nothing in this repository is ready to be reviewed. Currently this is just a proof-of-concept, and a very rough one at that as well.
 
