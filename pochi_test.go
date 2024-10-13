@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_internal_sanity(t *testing.T) {
+func Test_sanity(t *testing.T) {
 	t.Run("Inherited path", func(t *testing.T) {
 		r := pochi.NewRouter()
-		r.Route(pochi.Path("/"))
+		require.NoError(t, r.Route(pochi.Path("/")), "route should succeed")
 
 		// This should work
 		for _, path := range []string{"/", "/foo"} {
@@ -24,7 +24,7 @@ func Test_internal_sanity(t *testing.T) {
 	})
 	t.Run("Non-inherited path", func(t *testing.T) {
 		r := pochi.NewRouter()
-		r.Route(pochi.Path("/foo"))
+		require.NoError(t, r.Route(pochi.Path("/foo")), "route should succeed")
 
 		testcases := []struct {
 			Path  string
@@ -45,5 +45,9 @@ func Test_internal_sanity(t *testing.T) {
 				}
 			})
 		}
+	})
+	t.Run("relative paths", func(t *testing.T) {
+		r := pochi.NewRouter()
+		require.Error(t, r.Route(pochi.Path("foo")), "relative paths should not be allowed")
 	})
 }
