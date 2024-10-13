@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.2
 
 require (
-	github.com/lestrrat-go/trie/v2 v2.0.0-20241011142604-a68646f110ce
+	github.com/lestrrat-go/trie/v2 v2.0.0-20241013070156-5e6058b7f010
 	github.com/stretchr/testify v1.9.0
 )
 

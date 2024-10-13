@@ -1,6 +1,8 @@
 package pochi
 
 import (
+	"errors"
+	"fmt"
 	"iter"
 	"net/http"
 	"path"
@@ -12,7 +14,7 @@ import (
 type Router interface {
 	http.Handler
 	MatchRoute(string) (*PathSpec, bool)
-	Route(...*PathSpec)
+	Route(...*PathSpec) error
 	Walk(RouteVisitor)
 }
 
@@ -46,6 +48,7 @@ func iterToPath(nodes iter.Seq[trie.Node[string, *PathSpec]]) string {
 			buf.WriteByte('/')
 		}
 		buf.WriteString(n.Key())
+		count++
 	}
 	return buf.String()
 }
@@ -59,8 +62,18 @@ func (r *router) Walk(v RouteVisitor) {
 	}))
 }
 
-func (r *router) Route(specs ...*PathSpec) {
+var errInvalidPath = errors.New("invalid path")
+
+func ErrInvalidPath() error {
+	return errInvalidPath
+}
+
+func (r *router) Route(specs ...*PathSpec) error {
 	for _, spec := range specs {
+		if !strings.HasPrefix(spec.pattern, "/") {
+			return fmt.Errorf("paths must be absolute %q: %w", spec.pattern, ErrInvalidPath())
+		}
+
 		r.paths.Put(spec.pattern, spec)
 		node, ok := r.paths.GetNode(spec.pattern)
 		if !ok {
@@ -68,13 +81,21 @@ func (r *router) Route(specs ...*PathSpec) {
 		}
 		if spec.inheritMiddlewares {
 			for ancestor := range node.Ancestors() {
-				ancestorSpec := ancestor.Value()
+				rootPath := ancestor.First()
+				if rootPath == node {
+					continue
+				}
+				if rootPath.Key() != "" {
+					continue
+				}
+				ancestorSpec := rootPath.Value()
 				if ancestorSpec != nil {
 					spec.PrependMiddlewares(ancestorSpec.middlewares...)
 				}
 			}
 		}
 	}
+	return nil
 }
 
 func (r *router) MatchRoute(p string) (*PathSpec, bool) {
@@ -106,7 +127,7 @@ func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	spec, ok := r.cachedPaths[pathkey]
 	if !ok {
 		spec, ok = r.MatchRoute(pathkey)
-		if !ok {
+		if !ok || spec.handler == nil {
 			http.NotFound(w, req)
 			return
 		}
