@@ -2,17 +2,22 @@ package pochi
 
 import (
 	"net/http"
+	"strings"
 	"sync/atomic"
 
 	"github.com/lestrrat-go/pochi/middleware"
 )
 
 type PathSpec struct {
-	pattern            string
-	middlewares        []Middleware
-	compiled           atomic.Bool
-	handler            http.Handler
-	inheritMiddlewares bool
+	pattern string
+	// list of middlewares that were actually applied to this path
+	directMiddlewares []Middleware
+	// list of middlewares that were inherited from the parent path
+	inheritedMiddlewares []Middleware
+	compiled             atomic.Bool
+	rawHandler           http.Handler
+	handler              http.Handler
+	inheritMiddlewares   bool
 }
 
 // Path creates a new PathSpec object with the given pattern.
@@ -23,22 +28,39 @@ func Path(pattern string) *PathSpec {
 	}
 }
 
+func MountPath(prefix string, path *PathSpec) *PathSpec {
+	prefix = strings.TrimSuffix(prefix, "/")
+	p := Path(prefix + "/" + strings.TrimPrefix(path.pattern, "/"))
+	p.rawHandler = path.rawHandler
+	p.inheritMiddlewares = path.inheritMiddlewares
+	if l := len(path.directMiddlewares); l > 0 {
+		p.directMiddlewares = make([]Middleware, l)
+		copy(p.directMiddlewares, path.directMiddlewares)
+	}
+	return p
+}
+
+func (p *PathSpec) HasHandler() bool {
+	return p.rawHandler != nil
+}
+
 func (p *PathSpec) Pattern() string {
 	return p.pattern
 }
 
 func (p *PathSpec) Use(middlewares ...Middleware) *PathSpec {
-	p.middlewares = append(p.middlewares, middlewares...)
+	p.directMiddlewares = append(p.directMiddlewares, middlewares...)
 	return p
 }
 
-func (p *PathSpec) InheritMiddlewares(v bool) *PathSpec {
+// Inherit specifies whether the middlewares from the parent path should be inherited.
+func (p *PathSpec) Inherit(v bool) *PathSpec {
 	p.inheritMiddlewares = v
 	return p
 }
 
-func (p *PathSpec) PrependMiddlewares(middlewares ...Middleware) *PathSpec {
-	p.middlewares = append(middlewares, p.middlewares...)
+func (p *PathSpec) InheritMiddlewares(middlewares ...Middleware) *PathSpec {
+	p.inheritedMiddlewares = append(p.inheritedMiddlewares, middlewares...)
 	return p
 }
 
@@ -51,14 +73,24 @@ func (p *PathSpec) compile() {
 	if p.compiled.Load() {
 		return
 	}
-	for _, m := range p.middlewares {
-		p.handler = m.Wrap(p.handler)
+
+	p.handler = p.rawHandler
+	if l := len(p.directMiddlewares); l > 0 {
+		for i := l - 1; i >= 0; i-- {
+			p.handler = p.directMiddlewares[i].Wrap(p.handler)
+		}
+	}
+
+	if l := len(p.inheritedMiddlewares); l > 0 {
+		for i := l - 1; i >= 0; i-- {
+			p.handler = p.inheritedMiddlewares[i].Wrap(p.handler)
+		}
 	}
 	p.compiled.Store(true)
 }
 
 func (p *PathSpec) Method(m string, h http.Handler) *PathSpec {
-	p.handler = middleware.RestrictMethod(m).Wrap(h)
+	p.rawHandler = middleware.RestrictMethod(m).Wrap(h)
 	return p
 }
 
