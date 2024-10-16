@@ -1,7 +1,6 @@
 package pochi
 
 import (
-	"iter"
 	"strings"
 
 	"github.com/lestrrat-go/trie/v2"
@@ -21,13 +20,6 @@ func newPathtrie() *pathtrie {
 
 type pathTokenizer struct{}
 
-func (pathTokenizer) Tokenize(s string) (iter.Seq[string], error) {
-	comps := strings.Split(s, "/")
-	return func(yield func(string) bool) {
-		for _, c := range comps {
-			if !yield(c) {
-				break
-			}
-		}
-	}, nil
+func (pathTokenizer) Tokenize(s string) ([]string, error) {
+	return strings.Split(s, "/"), nil
 }

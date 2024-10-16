@@ -3,7 +3,6 @@ package pochi
 import (
 	"errors"
 	"fmt"
-	"iter"
 	"net/http"
 	"path"
 	"strings"
@@ -17,6 +16,7 @@ type Router interface {
 	http.Handler
 	MatchRoute(string) (*PathSpec, bool)
 	Route(...*PathSpec) error
+	Mount(string, Router) error
 }
 
 // TrieProvider is an interface that represents an object that can provide
@@ -42,25 +42,26 @@ func (r *router) Trie() *trie.Trie[string, string, *PathSpec] {
 }
 
 type RouteVisitor interface {
-	Visit(string, *PathSpec)
+	Visit(string, *PathSpec) bool
 }
 
-type RouteVisitFunc func(string, *PathSpec)
+type RouteVisitFunc func(string, *PathSpec) bool
 
-func (f RouteVisitFunc) Visit(s string, spec *PathSpec) {
-	f(s, spec)
+func (f RouteVisitFunc) Visit(s string, spec *PathSpec) bool {
+	return f(s, spec)
 }
 
-func iterToPath(nodes iter.Seq[trie.Node[string, *PathSpec]]) string {
-	var buf strings.Builder
-	count := 0
-	for n := range nodes {
-		if count > 0 {
-			buf.WriteByte('/')
-		}
-		buf.WriteString(n.Key())
-		count++
+func recurseIterToPath(sb *strings.Builder, nodes []trie.Node[string, *PathSpec]) {
+	if len(nodes) > 2 {
+		recurseIterToPath(sb, nodes[1:])
+		sb.WriteRune('/')
 	}
+	sb.WriteString(nodes[0].Key())
+}
+
+func iterToPath(nodes []trie.Node[string, *PathSpec]) string {
+	var buf strings.Builder
+	recurseIterToPath(&buf, nodes)
 	return buf.String()
 }
 
@@ -108,17 +109,15 @@ func (r *router) Route(specs ...*PathSpec) error {
 			panic("failed to fetch node that we just inserted")
 		}
 		if spec.inheritMiddlewares {
-			for ancestor := range node.Ancestors() {
+			for _, ancestor := range node.Ancestors() {
+				// Look for a child that has the "" key
 				rootPath := ancestor.First()
-				if rootPath == node {
-					continue
-				}
 				if rootPath.Key() != "" {
 					continue
 				}
 				ancestorSpec := rootPath.Value()
 				if ancestorSpec != nil {
-					spec.PrependMiddlewares(ancestorSpec.middlewares...)
+					spec.InheritMiddlewares(ancestorSpec.directMiddlewares...)
 				}
 			}
 		}
@@ -151,15 +150,25 @@ func (r *router) MatchRoute(p string) (*PathSpec, bool) {
 }
 
 func (r *router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	pathkey := req.URL.Path //strings.TrimSuffix(req.URL.Path, "/")
+	pathkey := req.URL.Path
 	spec, ok := r.cachedPaths[pathkey]
 	if !ok {
 		spec, ok = r.MatchRoute(pathkey)
-		if !ok || spec.handler == nil {
+		if !ok || !spec.HasHandler() {
 			http.NotFound(w, req)
 			return
 		}
 	}
 	r.cachedPaths[pathkey] = spec
 	spec.ServeHTTP(w, req)
+}
+
+func (r *router) Mount(prefix string, router Router) error {
+	return Walk(router, RouteVisitFunc(func(fullpath string, spec *PathSpec) bool {
+		p := MountPath(prefix, spec)
+		if err := r.Route(p); err != nil {
+			return false
+		}
+		return true
+	}))
 }

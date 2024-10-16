@@ -45,15 +45,15 @@ func ExampleRouter() {
 	r := pochi.NewRouter()
 
 	if err := r.Route(
-		pochi.Path("/foo/").
+		pochi.Path("/foo/bar/").
 			Use(exampleAccessLog()),
-		pochi.Path("/foo/regular").
+		pochi.Path("/foo/bar/regular").
 			Get(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprintf(w, "Hello, World! (inherits from /)")
 			})),
-		pochi.Path("/foo/nomiddlewares").
-			InheritMiddlewares(false).
+		pochi.Path("/foo/bar/nomiddlewares").
+			Inherit(false).
 			Get(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(http.StatusOK)
 				fmt.Fprintf(w, "Hello, World! (no accesslog)")
@@ -65,14 +65,15 @@ func ExampleRouter() {
 
 	// Traverse all routes
 	fmt.Println("--- All registered paths ---")
-	pochi.Walk(r, pochi.RouteVisitFunc(func(fullpath string, spec *pochi.PathSpec) {
+	pochi.Walk(r, pochi.RouteVisitFunc(func(fullpath string, spec *pochi.PathSpec) bool {
 		fmt.Printf("Path: %s\n", fullpath)
+		return true
 	}))
 
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	for _, path := range []string{"/foo/regular", "/foo/nomiddlewares"} {
+	for _, path := range []string{"/foo/bar/regular", "/foo/bar/nomiddlewares"} {
 		fmt.Printf("Issuing GET request to %q\n", path)
 		res, err := srv.Client().Get(srv.URL + path)
 		if err != nil {
@@ -99,14 +100,14 @@ func ExampleRouter() {
 
 	// OUTPUT:
 	// --- All registered paths ---
-	// Path: /foo/
-	// Path: /foo/nomiddlewares
-	// Path: /foo/regular
-	// Issuing GET request to "/foo/regular"
-	// {"time":"0001-01-01T00:00:00Z","level":"INFO","msg":"access","remote_addr":"127.0.0.1:99999","http_method":"GET","path":"/foo/regular","status":200,"body_bytes_sent":31,"http_referer":"","http_user_agent":"Go-http-client/1.1"}
+	// Path: /foo/bar/
+	// Path: /foo/bar/nomiddlewares
+	// Path: /foo/bar/regular
+	// Issuing GET request to "/foo/bar/regular"
+	// {"time":"0001-01-01T00:00:00Z","level":"INFO","msg":"access","remote_addr":"127.0.0.1:99999","http_method":"GET","path":"/foo/bar/regular","status":200,"body_bytes_sent":31,"http_referer":"","http_user_agent":"Go-http-client/1.1"}
 	// 200
 	// Hello, World! (inherits from /)
-	// Issuing GET request to "/foo/nomiddlewares"
+	// Issuing GET request to "/foo/bar/nomiddlewares"
 	// 200
 	// Hello, World! (no accesslog)
 }
