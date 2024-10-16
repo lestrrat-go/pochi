@@ -11,11 +11,18 @@ import (
 	"github.com/lestrrat-go/trie/v2"
 )
 
+// Router is an interface that represents a router: an object that can
+// route HTTP requests to the appropriate handler based on the request path.
 type Router interface {
 	http.Handler
 	MatchRoute(string) (*PathSpec, bool)
 	Route(...*PathSpec) error
-	Walk(RouteVisitor)
+}
+
+// TrieProvider is an interface that represents an object that can provide
+// a trie structure. This is currently only used to call `Walk` on the router
+type TrieProvider interface {
+	Trie() *trie.Trie[string, string, *PathSpec]
 }
 
 type router struct {
@@ -28,6 +35,10 @@ func NewRouter() Router {
 		paths:       newPathtrie(),
 		cachedPaths: make(map[string]*PathSpec),
 	}
+}
+
+func (r *router) Trie() *trie.Trie[string, string, *PathSpec] {
+	return r.paths.impl
 }
 
 type RouteVisitor interface {
@@ -53,13 +64,30 @@ func iterToPath(nodes iter.Seq[trie.Node[string, *PathSpec]]) string {
 	return buf.String()
 }
 
-func (r *router) Walk(v RouteVisitor) {
-	trie.Walk(r.paths.impl, trie.VisitFunc[string, *PathSpec](func(n trie.Node[string, *PathSpec], _ trie.VisitMetadata) bool {
+var errInvlidTrieProvider = errors.New("object does not provide a trie")
+
+func ErrInvalidTrieProvider() error {
+	return errInvlidTrieProvider
+}
+
+// Walk traverses the trie structure of the router, and calls the Visit method from
+// the provided RouteVisitor for each path that has a handler attached to it.
+// The path is the full path of the route, and the PathSpec is the associated PathSpec
+// object.
+//
+// If the router does not implement a TrieProvider, this function will return an error
+func Walk(r Router, v RouteVisitor) error {
+	tp, ok := r.(TrieProvider)
+	if !ok {
+		return ErrInvalidTrieProvider()
+	}
+	trie.Walk(tp.Trie(), trie.VisitFunc[string, *PathSpec](func(n trie.Node[string, *PathSpec], _ trie.VisitMetadata) bool {
 		if spec := n.Value(); spec != nil {
 			v.Visit(iterToPath(n.Ancestors())+"/"+n.Key(), spec)
 		}
 		return true
 	}))
+	return nil
 }
 
 var errInvalidPath = errors.New("invalid path")

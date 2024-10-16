@@ -65,7 +65,7 @@ func ExampleRouter() {
 
 	// Traverse all routes
 	fmt.Println("--- All registered paths ---")
-	r.Walk(pochi.RouteVisitFunc(func(fullpath string, spec *pochi.PathSpec) {
+	pochi.Walk(r, pochi.RouteVisitFunc(func(fullpath string, spec *pochi.PathSpec) {
 		fmt.Printf("Path: %s\n", fullpath)
 	}))
 
