@@ -97,6 +97,48 @@ func Test_sanity(t *testing.T) {
 
 	})
 
+	t.Run("middleware order (set root path after leaves)", func(t *testing.T) {
+		addcount := func(i int) pochi.Middleware {
+			return pochi.MiddlewareFunc(func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					next.ServeHTTP(w, r)
+					fmt.Fprintf(w, "%d\n", i)
+				})
+			})
+		}
+		r := pochi.NewRouter()
+		require.NoError(t, r.Route(
+			pochi.Path("/foo/bar").
+				Use(
+					addcount(4),
+					addcount(5),
+					addcount(6),
+				).Get(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "7\n")
+			})),
+			pochi.Path("/foo/").
+				Use(
+					addcount(1),
+					addcount(2),
+					addcount(3),
+				),
+		), "route should succeed")
+
+		srv := httptest.NewServer(r)
+		defer srv.Close()
+
+		res, err := srv.Client().Get(srv.URL + "/foo/bar")
+		require.NoError(t, err, "GET should succeed")
+		defer res.Body.Close()
+
+		require.Equal(t, http.StatusOK, res.StatusCode, "status code should be 200")
+		buf, err := io.ReadAll(res.Body)
+		require.NoError(t, err, "reading response body should succeed")
+		require.Equal(t, "7\n6\n5\n4\n3\n2\n1\n", string(buf), "response body should match")
+
+	})
+
 	t.Run("Mount", func(t *testing.T) {
 		r1 := pochi.NewRouter()
 		r1.Route(

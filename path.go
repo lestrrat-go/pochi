@@ -14,10 +14,13 @@ type PathSpec struct {
 	directMiddlewares []Middleware
 	// list of middlewares that were inherited from the parent path
 	inheritedMiddlewares []Middleware
-	compiled             atomic.Bool
-	rawHandler           http.Handler
-	handler              http.Handler
-	inheritMiddlewares   bool
+
+	// set to true if the object's handler has been "compiled" with all of
+	// the appropriate middlewares
+	compiled           atomic.Bool
+	rawHandler         http.Handler
+	handler            http.Handler
+	inheritMiddlewares bool
 }
 
 // Path creates a new PathSpec object with the given pattern.
@@ -67,6 +70,13 @@ func (p *PathSpec) InheritMiddlewares(middlewares ...Middleware) *PathSpec {
 func (p *PathSpec) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	p.compile()
 	p.handler.ServeHTTP(w, req)
+}
+
+func (p *PathSpec) invalidate() {
+	p.compiled.Store(false)
+	if len(p.inheritedMiddlewares) > 0 {
+		p.inheritedMiddlewares = p.inheritedMiddlewares[:0]
+	}
 }
 
 func (p *PathSpec) compile() {
